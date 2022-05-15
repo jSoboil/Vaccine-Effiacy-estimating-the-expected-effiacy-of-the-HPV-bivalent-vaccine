@@ -1,9 +1,0 @@
----
-title: "BDA - Project"
-author: "Anonymous"
-output: 
-  pdf_document: 
-    toc: yes
-    toc_depth: 1
-urlcolor: blue
----
