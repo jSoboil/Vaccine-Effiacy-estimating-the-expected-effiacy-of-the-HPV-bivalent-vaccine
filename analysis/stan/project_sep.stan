@@ -25,13 +25,20 @@ model {
  // priors
  for (i in 1:n_s) {
   // group-level random effect (Matthijsse S. et al)
-  mu[i] ~ normal(-1.38, 0.7);
+  mu[i] ~ normal(-1.38, 1000);
   // group-level average treatment effect (ATE) (Kamolratanakul S. et al)
-  delta[i] ~ student_t(2, 0.85, 1);
+  delta[i] ~ student_t(4, 1.1, 1000);
   // control: binomial likelihood with logit link
   y_0[i] ~ binomial_logit(n_0[i], mu[i]);
   // vaccine: binomial likelihood with logit link
   y_1[i] ~ binomial_logit(n_1[i], mu[i] + delta[i]);
+ }
+}
+generated quantities {
+ real log_lik[n_s];
+ for (i in 1:n_s) {
+  // log-lik for treatment arm groups
+  log_lik[i] = binomial_logit_lpmf(y_1[i] | n_1[i], mu[i] + delta[i]);
  }
 }
 // End file

@@ -6,6 +6,7 @@ output:
     toc: yes
     toc_depth: 3
 urlcolor: blue
+always_allow_html: true
 ---
 ```{r setup, include = TRUE, message = FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.height = 6, fig.width = 10)
@@ -21,13 +22,12 @@ theme_set(theme_minimal())
 color_scheme_set("blue")
 ```
 
-**Note: this is the contents page. The assignment starts on the following page.**\
+**Note: this is the contents page. The assignment starts on the following page.**  
 \newpage  
-
-#  1. Introduction
-This project is motivated by a thesis I finished in 2020. The thesis included a pairwise random-effects meta-analysis to estimate the efficacy of the Bivalent Human Papillomavirus vaccine. It was originally coded in JAGS, did not have any proper priors, did not include coefficients, and was ultimately used to inform a fully-integrated Bayesian health economics model. The original JAGS model was coded as:
-
-
+  
+#  1. Introduction  
+This project is motivated by a thesis I finished in 2020. The thesis included a pairwise random-effects meta-analysis to estimate the efficacy of the bivalent Cervarix Human Papillomavirus vaccine. It was originally coded in JAGS, did not have any proper priors, did not include coefficients, and was ultimately used to inform a fully-integrated Bayesian health economics model. The original JAGS model was coded as:  
+  
 ```
 # likelihood and prior. Model parameters are abbreviated by .vac.
   for (i in 1:Nstud.vac) {
@@ -55,26 +55,26 @@ This project is motivated by a thesis I finished in 2020. The thesis included a 
        # Mixed predictve p-value:
         pA.mxd[i] <- step(rA.mxd[i] - rA.vac[i]) - 0.5 * equals(rA.mxd[i], rA.vac[i])
 ```
-
-Since finishing the thesis, I have wanted to redo the meta-analysis in Stan. Note that this project won't, however, include the economic model. Please see a simple illustration of the model below (note that some of the final model assumptions may differ).
-
+  
+Since finishing the thesis, I have wanted to redo the meta-analysis in Stan. Note that this project won't, however, include the economic model. Please see a simple illustration of the model below (note that some of the final model assumptions may differ).  
+  
 <center>
 ![Model illustration. Note that some parameter distributions for the final are different, since informative priors have been added](misc/model_illustration.png)
 <center>
 
-Given the above motivation, I will implement the original model in Stan and include proper priors, which will be given logical boundaries when necessary. Coefficients will also be included where applicable. I will also compare grouped and hierarchical models.
-
+Given the above motivation, I will implement the original model in Stan and include proper priors, which will be given logical boundaries when necessary. Coefficients will also be included where applicable. I will also compare a separate and hierarchical model.  
 \newpage  
-#  2. Data
-The data for the model are printed below. Note that references for each input can be found in the original Excel file.
+
+#  2. Data  
+The data for the model are printed below. Note that references for each input can be found in the original Excel file.  
 ```{r data, include = TRUE}
 # load data
 df <- read_excel("data/data_vaccine_case_control.xlsx")
 # print data frame
-DT::datatable(df)
+print(df)
 ```
 
-We can then prepare the data for Stan as follows:
+We can then prepare the data for Stan as follows:  
 ```{r data prep, include = TRUE}
 # n studies
 n_s <- nrow(df)
@@ -89,39 +89,43 @@ n_1 <- df$n_vaccine
 # data list
 data_list <- list(n_s = n_s, y_0 = y_0, n_0 = n_0, y_1 = y_1, n_1 = n_1)
 ```
-The model will thus loop through an $i \times j$ matrix, with $i$ rows and $j$ columns, where there are $i$ studies with $j$ arms.
+The model will thus loop through an $i \times j$ matrix, with $i$ rows and $j$ columns, where there are $i$ studies with $j$ arms.  
 
 #  3. Model
-The general model is a simple binomial model with several priors and hyperiors (same as above). However, to provide an understanding of whether a separate or hierarchical model is better suited to the problem at hand, we can ought to run the model as both a separate or hierarchical model, respectively. These different approaches to the model have a slightly different structure, which is detailed in the '*Model background and results*' section below.
+The general model is a simple binomial model with several priors and hyperiors (same as above). However, to provide an understanding of whether a separate or hierarchical model is better suited to the problem at hand, we can ought to run the model as both a separate or hierarchical model, respectively. These different approaches to the model have a slightly different structure, which is detailed in the '*Model background and results*' section below.  
 
 ##  3.1 Model background and results  
-Below is a brief discussion and illustration of each model.
+Below is a brief discussion and illustration of each model.  
 
 ###  3.3.1 The Separate model
-The separate model is the simpler of the two types (in terms of the number of parameters). Notationally, the model can be represented as 
+The separate model is the simpler of the two types (in terms of the number of parameters). Notationally, the model can be represented as  
 \[
 y_{ij} \sim Bin(n_{ij}, p_{ij})
 \]
-where $y_{ij}$ and $n_{ij$ are the $i$'th events and observations for $j'th$ arm (vaccine or control), respectively. Then, to define a generalised linear model, we can use a logit link to develop a logistic regression model. Thus,
+
+where $y_{ij}$ and $n_{ij}$ are the $i$'th events and observations for $jth$'th arm (vaccine or control), respectively. Then, to define a generalised linear model, we can use a logit link to develop a logistic regression model. Thus,  
 \[
 logit(p_{ij})\equiv log(\frac{p_{ij}}{1 - p{ij}})
 \]
-which, more precisely, is the linear predictor
+which, more precisely, is the linear predictor  
 \[
-logit(p_{ij}) = \mu_{i} + \Delta_{ij}
+logit(p_{ij}) = \mu_{i} + \delta_{ij}
 \]
-where
+where  
 \[
-\mu_{i} \sim \mathcal{N}(20, 2)
+\mu_{i} \sim \mathcal{N}(-1.38, 1000)
 \]
-and
+and  
 $$
-\Delta_{.j}= \begin{cases}
- 0, & \text{if } j = 0 (control arm)\\
- \sim St(\nu, \psi, \tau), & \text{if } j = 1 (vaccine arm)\\
+\delta_{.j}= \begin{cases}
+ 0, & \text{if } j = 0\\
+ \sim Student-t(\nu, \psi, \tau), & \text{if } j = 1\\
 \end{cases}
-$$
-since the control arm is no average treatment effect (ATE). Note that $mu_{i}$ represents the group-level 'random effect'. The probability of efficacy is therefore assumed to be a additive combination of a random population effect and the average treatment effect, at a group-level, when applicable (conditional on whether the group arm received the treatment or not). Here, $\psi$ and $\tau$ represent reasonable informative prior values (which are $84$ and $4$ respectively. However, note that the priors $\mu_{i$ and $\Delta_{ij}$ values for the separate model are recoded as hyperpriors in the hierarchical model. Discussion on these values is therefore deferred to section 3.3.2. Finally, note that the Stan code for the separate model is coded as
+$$  
+since the control arm is no average treatment effect (ATE). Note that $\mu_{i}$ represents the group-level 'random effect' and $j = 0$ and  $j = 1$ represent the indexing for the control and vaccine arms respectively. The probability of efficacy is therefore assumed to be a additive combination of a random population effect and the average treatment effect, at a group-level, when applicable (conditional on whether the group arm received the treatment or not). Here, $\psi$ represents a reasonable informative mean prior value. Note that the priors for $\mu_{i}$ and $\delta_{ij}$ in the separate model are recoded as hyperpriors in the hierarchical model.  
+  
+Discussion on these values is therefore deferred to section 3.3.2. In addition, the within group treatment effect has been specified as a student-t distribution, to account for greater uncertainty in distribution tails (as there is large variation in the size of the studies and the group results). Finally, note that the Stan code for the separate model is coded as  
+  
 ```
 // Random Effects
 // Pair-wise meta-analysis
@@ -150,62 +154,70 @@ model {
  // priors
  for (i in 1:n_s) {
   // group-level random effect (Matthijsse S. et al)
-  mu[i] ~ normal(20, 2);
+  mu[i] ~ normal(-1.38, 1000);
   // group-level average treatment effect (ATE) (Kamolratanakul S. et al)
-  delta[i] ~ student_t(2, 82, 4);
+  delta[i] ~ student_t(4, 1.1, 1000);
   // control: binomial likelihood with logit link
   y_0[i] ~ binomial_logit(n_0[i], mu[i]);
   // vaccine: binomial likelihood with logit link
   y_1[i] ~ binomial_logit(n_1[i], mu[i] + delta[i]);
  }
 }
+generated quantities {
+ real log_lik[n_s];
+ for (i in 1:n_s) {
+  // log-lik for treatment arm groups
+  log_lik[i] = binomial_logit_lpmf(y_1[i] | n_1[i], mu[i] + delta[i]);
+ }
+}
 // End file
-```
+```  
 ```{r vaccine separate model, include = FALSE, echo = FALSE}
 # initiate simulation
 project_sep <- stan(file = "stan/project_sep.stan", data = data_list,
-                      pars = c("p_eff", "odds_eff", "delta"))
+                      pars = c("p_eff", "odds_eff", "delta", "log_lik"))
 ```
-The results of the model, for the probability of vaccine effectiveness, for each group $i$ are
+The results of the model, for the probability of vaccine effectiveness, for each group $i$ are  
 ```{r separate print, include = TRUE}
 # print results
 print(project_sep, pars = c("p_eff[1]", "p_eff[2]", "p_eff[3]", "p_eff[4]",
                             "p_eff[5]", "p_eff[6]", "p_eff[7]", "p_eff[8]",
                             "p_eff[9]", "p_eff[10]", "p_eff[11]"))
 ```
-**Note: to avoid the verbose messaging from Stan's parser, I have excluded the execution code for both the separate and hierarhical model.**  
-
-###  3.3.2 The Hierarchical model
-Unlike the separate model, the hierarchical model includes a population-level average treatment effect (ATE) parameter $\psi$. Hence, unlike the previous model, here $\psi$ is drawn from a $\mathcal{N}(\mu, \sigma^{2})$ with mean $\mu$ and variance $\sigma^{2}$. Thus, the symbolic illustration of the hierarchical model differs slightly. The likelihood and priors are the same, so
+**Note: to avoid the verbose messaging from Stan's parser, I have excluded the execution code for both the separate and hierarhical model.**   
+  
+###  3.3.2 The Hierarchical model  
+Unlike the separate model, the hierarchical model includes a population-level average treatment effect (ATE) parameter $\psi$. Hence, unlike the previous model, here $\psi$ is drawn from a $\mathcal{N}(\mu, \sigma^{2})$ with mean $\mu$ and variance $\sigma^{2}$. Thus, the symbolic illustration of the hierarchical model differs slightly. The likelihood and priors are the same, so  
 \[
 y_{ij} \sim Bin(n_{ij}, p_{ij})
 \]
 \[
-logit(p_{ij}) = \mu_{i} + \Delta_{ij}
+logit(p_{ij}) = \mu_{i} + \delta_{ij}
 \]
-where
+where  
 $$
-\Delta_{.j}= \begin{cases}
- 0, & \text{if } j = 0 (control arm)\\
- \sim St(\nu, \psi, \tau), & \text{if } j = 1 (vaccine arm)\\
+\delta_{.j}= \begin{cases}
+ 0, & \text{if } j = 0\\
+ \sim Student-t(\nu, \psi, \tau), & \text{if } j = 1\\
 \end{cases}
 $$
-
-However, hyperiors are included to capture the expected variation of the '*population-level*' vaccine efficacy. This thus shrinks the estimate to towards a common value and, theoretically, reduces uncertainty. These hyperpriors are represented as
-
+  
+However, hyperiors are included to capture the expected variation of the '*population-level*' vaccine efficacy. This thus shrinks the estimate to towards a common value and, theoretically, reduces uncertainty. These hyperpriors are represented as  
+  
 \[
-\psi \sim \mathcal{N}(0.85, 4)
+\psi \sim \mathcal{N}(-1.38, 1000)
 \]
-and
+and  
 \[
-\tau \sim \mathcal{Inv-Chi}_{2}(5)
+\tau \sim Inv- \chi_{2}(5)
 \]
-
-The values for the population-level average treatment effect parameter $\psi$ is a sceptical prior. The intention is to pull the mean of the posterior distribution towards a more conservative estimate. Hence, the hyperprior $\psi$ takes on a mean probability of $\pi=0.7$. This translates to an odds of $\eta=\frac{\pi}{1-\pi} \approx 2.33$ and a log-odds of $ln(eta)\approx 0.85$. The degrees of freedom value for the $\mathcal{Inv-Chi}_{2}$ distribution is set at $5$, giving the parameter a reasonable range to vary over for the standard deviation of the population level distribution.
-
-The group-level mean random effect $\mu_{i}$ is set changed to an informative prior and is intended to represent the natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of having $0$ immunity at baseline, the point estimate for the mean of this distribution is $\zeta=0.2$. Again, to translate this value to odds $\gamma=\frac{\zeta}{1-\zeta} \approx 0.25$ and to add this as a log-odds, $ln(\gamma)\approx -1.38$. Both parameters $\psi$ and $\mu_{i}$ have a standard deviation set to a point that allows the parameter to vary over a reasonable range.
-
-Finally, you can find the hierarchical model's Stan syntax and results below.
+  
+The values for the population-level average treatment effect parameter $\psi$ is a skeptical prior. The intention is to pull the mean of the posterior distribution towards a more conservative estimate. Hence, the hyperprior $\psi$ takes on a mean probability of $\pi=0.75$. This translates to an odds of $\frac{\pi}{1-\pi}=3$ and a log-odds of $\ln{3} \approx 1.1$. The degrees of freedom value for the $Inv- \chi_{2}$ distribution is set at $5$, giving the parameter a reasonable range to vary over for the standard deviation of the population level distribution.  
+  
+The group-level mean random effect $\mu_{i}$ is set to an informative prior and is intended to represent the probability of natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of having $0$ immunity at baseline, the point estimate for the mean of this distribution is to a probability of $\zeta=0.2$. Again, we have to first translate this value to odds $frac{\zeta}{1-\zeta} = 0.25$ and then to a log-odds scale, so that $\ln{0.25} \approx -1.38$.  
+  
+Parameters $\psi$ and $\mu_{i}$ also have respective standard deviation parameters each set to a point that allows these parameter to vary over a reasonable range. This reasoning was based on several iterations of both the separate and hierarhical model, showing the need for greater dispersion. I assume that this is due to the variation in the sizes of the number of observations between the $11$ studies used for this analysis. Lastly, you can find the hierarchical model's Stan syntax and results below.  
+  
 ```
 // Random Effects
 // Pair-wise meta-analysis
@@ -221,29 +233,36 @@ parameters {
  real psi;
  real mu[n_s];
  real delta[n_s];
- real <lower = 0> tau;
+ real <lower = 0, upper = 20> tau;
 }
 transformed parameters {
  real p_eff;
  real odds_eff;
  // anti-logit
- odds_eff = exp(psi);         // transform log-odds ratio to odds-ratio
- p_eff = 1 / (1 + odds_eff);  // transform odds ratio to probability
+ odds_eff = exp(psi);        // transform log-odds ratio to odds-ratio
+ p_eff = 1 / (1 + odds_eff); // transform odds ratio to probability
 }
 model {
  // hyperpriors
- psi ~ normal(0.85, 1);     // populatiuon-level ATE (Kamolratanakul S. et al)
- tau ~ inv_chi_square(5);   // populatiuon-level stdev
+ psi ~ normal(1.1, 1000);  // pop-level (log-odds) ATE (Kamolratanakul S. et al)
+ tau ~ inv_chi_square(5);  // populatiuon-level stdev
  // priors
  for (i in 1:n_s) {
-  // group-level random effect (Matthijsse S. et al)
-  mu[i] ~ normal(-1.38, 0.7);
+  // group-level random (log-odds) effect (Matthijsse S. et al)
+  mu[i] ~ normal(-1.38, 1000);
   // group-level average treatment effect (ATE)
-  delta[i] ~ student_t(2, psi, tau);
+  delta[i] ~ student_t(4, psi, tau);
   // control: binomial likelihood with logit link
   y_0[i] ~ binomial_logit(n_0[i], mu[i]);
   // vaccine: binomial likelihood with logit link
   y_1[i] ~ binomial_logit(n_1[i], mu[i] + delta[i]);
+ }
+}
+generated quantities {
+ real log_lik[n_s];
+ for (i in 1:n_s) {
+  // log-lik for treatment arm groups
+  log_lik[i] = binomial_logit_lpmf(y_1[i] | n_1[i], mu[i] + delta[i]);
  }
 }
 // End file
@@ -251,17 +270,45 @@ model {
 ```{r vaccine hierarchical model, include = FALSE, echo = FALSE}
 # initiate simulation
 project_hrchl <- stan(file = "stan/project_hrchl.stan", data = data_list,
-                      pars = c("p_eff", "odds_eff", "psi", "tau"))
+                      pars = c("p_eff", "odds_eff", "psi", "tau", 
+                               "log_lik"))
 ```
 ```{r hierarchical print, include = TRUE}
 # print results
-project_hrchl
+print(project_hrchl, pars = c("p_eff", "odds_eff", "psi", "tau"))
 ```
-
-#  4 Inspecting the models
-The following section investigates the internal validity of both the separate model by implementing leave-one-out cross-validation using the `loo` package.
-
-
-#  5. Discussion
-
-#  6. Conclusion
+  
+#  4 Inspecting the models  
+The following section investigates the internal validity of both the separate model by implementing PSIS leave-one-out cross-validation using the `loo` package.
+  
+##  4.1 Separate model  
+```{r separate loo, include = TRUE, warning = FALSE}
+# print results
+loo(project_sep)
+plot(loo(project_hrchl), diagnostic = c("k"), label_points = TRUE,
+     main = "PSIS diagnostic plot")
+```
+  
+The above diagnostics indicate that the separate model failed to capture information for several of the groups, since many of the estimates are $\tilde{k} > 0.7$. In other words, given the $\tilde{k}$ results, this indicates that for some observations the leave-one-out posteriors are different enough from the full posterior that importance-sampling is not able to correct the difference. The model is not completely inadequately specified, given the `p_loo` result of $6.5$ parameters. However, this is still roughly $2.5\times$ the number of parameters used in the model and so we can deduce that the model can serve as a building block for a more complex model.  
+  
+##  4.2 Hierarchical model  
+```{r hierarchical loo, include = TRUE, warning = FALSE}
+# print results
+loo(project_hrchl)
+plot(loo(project_hrchl), diagnostic = c("k"), label_points = TRUE,
+     main = "PSIS diagnostic plot")
+loo_compare(list(
+ "Separate Model" = loo(project_hrchl), 
+ "Hierarchical Model" = loo(project_sep))
+ )
+```
+  
+For the hierarchical model, the above indicate that the hierarchical is able to capture more information than the previous model. However, many of the estimates are still $\tilde{k} > 0.7$. Again, this indicates that for some observations the leave-one-out posteriors are different enough from the full posterior that importance-sampling is not able to correct the difference. The model is however, more adequately specified, given the `p_loo` result of only $6.5$ parameters since $6$ parameters we used to fit the model. 
+\newpage
+  
+#  5. Discussion  
+From the above results and PSIS-LOO diagnostics, the hierarchical model has a more favourable expected log predictive density (ELPD) compared to the separate model. This implies that the hierarchical model can be expected to have a better predictive performance. In addition, the model indicates that the expected vaccine efficacy for the bivalent 16/18 Human Papillomavirus (HPV) is $\approx 92\%$. However, both models suffer from poor Pareto-$\tilde{k}$ values. Therefore, developing the hierarchical model further would be favourable. Incorporating coefficients, such as each study's latitude and or longitude may be beneficial. Another interesting estimate would be the value of information (VoI) of conducting an additional Randomised Control Trial (RCT) to further assess vaccine efficacy. Over and above these results, there is a need to consider 'double-counting' of some of the studies used in this analysis, as 3 of the RCTs used were long-term follow-ups of original papers.
+  
+#  6. Conclusion  
+A hierarchical model was used to synthesise 11 Randomised Control Trials to estimate the efficacy of the bivalent Cervarix HPV 16/18 strain vaccine. The expected posterior efficacy of the vaccine is estimated to be $\approx 92\%$, indicating that the bivalent 16/18 strain vaccine has a high-level of protection against the virus. However, the model suffers from poor Pareto-$\tilde{k}$ diagnostic values indicating that there is variation in the observed data that the model is unable to capture. Incorporating possible predictors, by fitting additional coefficients, would be beneficial. However, due to time constraints, this was not investigated further. Please see the Github [repository](https://github.com/jSoboil/Vaccine-Effiacy-estimating-the-expected-effiacy-of-the-HPV-bivalent-vaccine) to access the model code.
+  
