@@ -29,19 +29,20 @@ color_scheme_set("blue")
 This project is motivated by a thesis I finished in 2020. The thesis included a pairwise random-effects meta-analysis to estimate the efficacy of the bivalent Cervarix Human Papillomavirus vaccine. It was originally coded in JAGS, did not have any proper priors, did not include coefficients, and was ultimately used to inform a fully-integrated Bayesian health economics model. The original JAGS model was coded as:  
   
 ```
+### SUB-MODEL 2: POP. LEVEL VACCINE-EFFICACY. 
+# Note: this is a Bayesian Posterior model, as it combines evidence directly via the 
 # likelihood and prior. Model parameters are abbreviated by .vac.
   for (i in 1:Nstud.vac) {
     # Likelihood:
      rA.vac[i] ~ dbin(pA.vac[i], nA.vac[i])
      rB.vac[i] ~ dbin(pB.vac[i], nB.vac[i])
-
     # Logistic link function:
      logit(pA.vac[i]) <- mu.vac[i]
      logit(pB.vac[i]) <- mu.vac[i] + delta.vac[i]
     
-    # Average random effect prior for SUB-MODEL 2:
+    # Average effect prior for SUB-MODEL 2:
      mu.vac[i] ~ dnorm(0, 1e-4)
-    # Prior for sub-model 2 (ATE pop. effect):
+    # Prior for sub-model 2 (Random. pop. effect):
      delta.vac[i] ~ dt(psi.vac, prec.vac, 1) 
      # if desired can be ~ dnorm(psi.vac, prec.vac)
     
@@ -54,6 +55,22 @@ This project is motivated by a thesis I finished in 2020. The thesis included a 
                
        # Mixed predictve p-value:
         pA.mxd[i] <- step(rA.mxd[i] - rA.vac[i]) - 0.5 * equals(rA.mxd[i], rA.vac[i])
+  }
+  
+  # Hyperpriors for SUB-MODEL 2:
+     psi.vac ~ dnorm(0, 1.0e-4)
+     prec.vac <- pow(tau.vac, -2)
+     tau.vac ~  dt(0, 1, 1)T(0, )
+  
+  # Transformations for SUB-MODEL 2:
+   # Convert LOR to OR
+    OR.vac <- exp(psi.vac)
+   # Convert OR to probability for vaccine efficacy
+    pEfficacy.vac <- 1 / (1 + OR.vac)
+   
+     # Predicted average treatment effect:
+      delta.new ~ dnorm(psi.vac, prec.vac)
+### END OF SUB-MODEL 2.
 ```
   
 Since finishing the thesis, I have wanted to redo the meta-analysis in Stan. Note that this project won't, however, include the economic model. Please see a simple illustration of the model below (note that some of the final model assumptions may differ).  
@@ -61,10 +78,8 @@ Since finishing the thesis, I have wanted to redo the meta-analysis in Stan. Not
 <center>
 ![Model illustration. Note that some parameter distributions for the final are different, since informative priors have been added](misc/model_illustration.png)
 <center>
-
 Given the above motivation, I will implement the original model in Stan and include proper priors, which will be given logical boundaries when necessary. Coefficients will also be included where applicable. I will also compare a separate and hierarchical model.  
-\newpage  
-
+  
 #  2. Data  
 The data for the model are printed below. Note that references for each input can be found in the original Excel file.  
 ```{r data, include = TRUE}
@@ -214,7 +229,7 @@ and
   
 The values for the population-level average treatment effect parameter $\psi$ is a skeptical prior. The intention is to pull the mean of the posterior distribution towards a more conservative estimate. Hence, the hyperprior $\psi$ takes on a mean probability of $\pi=0.75$. This translates to an odds of $\frac{\pi}{1-\pi}=3$ and a log-odds of $\ln{3} \approx 1.1$. The degrees of freedom value for the $Inv- \chi_{2}$ distribution is set at $5$, giving the parameter a reasonable range to vary over for the standard deviation of the population level distribution.  
   
-The group-level mean random effect $\mu_{i}$ is set to an informative prior and is intended to represent the probability of natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of having $0$ immunity at baseline, the point estimate for the mean of this distribution is to a probability of $\zeta=0.2$. Again, we have to first translate this value to odds $frac{\zeta}{1-\zeta} = 0.25$ and then to a log-odds scale, so that $\ln{0.25} \approx -1.38$.  
+The group-level mean random effect $\mu_{i}$ is set to an informative prior and is intended to represent the probability of natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of having $0$ immunity at baseline, the point estimate for the mean of this distribution is to a probability of $\zeta=0.2$. Again, we have to first translate this value to odds $\frac{\zeta}{1-\zeta} = 0.25$ and then to a log-odds scale, so that $\ln{0.25} \approx -1.38$.  
   
 Parameters $\psi$ and $\mu_{i}$ also have respective standard deviation parameters each set to a point that allows these parameter to vary over a reasonable range. This reasoning was based on several iterations of both the separate and hierarhical model, showing the need for greater dispersion. I assume that this is due to the variation in the sizes of the number of observations between the $11$ studies used for this analysis. Lastly, you can find the hierarchical model's Stan syntax and results below.  
   
