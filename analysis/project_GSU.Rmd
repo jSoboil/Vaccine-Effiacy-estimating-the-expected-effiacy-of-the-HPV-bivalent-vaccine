@@ -78,6 +78,7 @@ Since finishing the thesis, I have wanted to redo the meta-analysis in Stan. Not
 <center>
 ![Model illustration. Note that some parameter distributions for the final are different, since informative priors have been added](misc/model_illustration.png)
 <center>
+
 Given the above motivation, I will implement the original model in Stan and include proper priors, which will be given logical boundaries when necessary. Coefficients will also be included where applicable. I will also compare a separate and hierarchical model.  
   
 #  2. Data  
@@ -227,11 +228,11 @@ and
 \tau \sim Inv- \chi_{2}(5)
 \]
   
-The values for the population-level average treatment effect parameter $\psi$ is a skeptical prior. The intention is to pull the mean of the posterior distribution towards a more conservative estimate. Hence, the hyperprior $\psi$ takes on a mean probability of $\pi=0.75$. This translates to an odds of $\frac{\pi}{1-\pi}=3$ and a log-odds of $\ln{3} \approx 1.1$. The degrees of freedom value for the $Inv- \chi_{2}$ distribution is set at $5$, giving the parameter a reasonable range to vary over for the standard deviation of the population level distribution.  
+The values for the population-level average treatment effect parameter $\psi$ are drawn from a sceptical prior. The intention is to pull the mean of the posterior distribution towards a more conservative estimate. Hence, the hyper-prior $\psi$ takes on a mean probability of $\pi=0.75$. This translates to an odds of $\frac{\pi}{1-\pi}=3$ and a log-odds of $\ln{3} \approx 1.1$. The degrees of freedom value for the $Inv- \chi_{2}$ distribution is set at $5$, giving the parameter a reasonable range for the standard deviation of the population level distribution.  
   
-The group-level mean random effect $\mu_{i}$ is set to an informative prior and is intended to represent the probability of natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of having $0$ immunity at baseline, the point estimate for the mean of this distribution is to a probability of $\zeta=0.2$. Again, we have to first translate this value to odds $\frac{\zeta}{1-\zeta} = 0.25$ and then to a log-odds scale, so that $\ln{0.25} \approx -1.38$.  
+The group-level mean random effect $\mu_{i}$ is set to an informative prior and is intended to represent the probability of natural evasion experienced by women (see reference: Matthijsse S. et al). Hence, rather than being set to an average effect of $0$ immunity at baseline, the point estimate for the mean of this distribution is set to a probability of $\zeta=0.2$. Again, we translate this value to odds $\frac{\zeta}{1-\zeta} = 0.25$ and then to a log-odds scale, so that $\ln{0.25} \approx -1.38$.  
   
-Parameters $\psi$ and $\mu_{i}$ also have respective standard deviation parameters each set to a point that allows these parameter to vary over a reasonable range. This reasoning was based on several iterations of both the separate and hierarhical model, showing the need for greater dispersion. I assume that this is due to the variation in the sizes of the number of observations between the $11$ studies used for this analysis. Lastly, you can find the hierarchical model's Stan syntax and results below.  
+Parameters $\psi$ and $\mu_{i}$ also have respective standard deviation parameters each set to a point that enables a plausible range of values. This reasoning was based on several iterations of both the separate and hierarchical model, showing the need for greater dispersion. I assume that this is due to the variation in the sizes of the number of observations between the $11$ studies used for this analysis. Lastly, you can find the hierarchical model's Stan syntax and results below.  
   
 ```
 // Random Effects
@@ -304,7 +305,7 @@ plot(loo(project_hrchl), diagnostic = c("k"), label_points = TRUE,
      main = "PSIS diagnostic plot")
 ```
   
-The above diagnostics indicate that the separate model failed to capture information for several of the groups, since many of the estimates are $\tilde{k} > 0.7$. In other words, given the $\tilde{k}$ results, this indicates that for some observations the leave-one-out posteriors are different enough from the full posterior that importance-sampling is not able to correct the difference. The model is not completely inadequately specified, given the `p_loo` result of $6.5$ parameters. However, this is still roughly $2.5\times$ the number of parameters used in the model and so we can deduce that the model can serve as a building block for a more complex model.  
+The above diagnostics indicate that the separate model fails to capture important information for several of the cohort groups. Many estimates are $\tilde{k} > 0.7$. In other words, given the $\tilde{k}$ results, this indicates that for some observations the leave-one-out posteriors are different enough from the full posterior that importance-sampling is not able to correct the difference between the out-of-group sample and the others. The model is thus inadequately specified, which is further indicated by the `p_loo` result of $6.5$ parameters. However, the model can serve as a building block for a more complex model.
   
 ##  4.2 Hierarchical model  
 ```{r hierarchical loo, include = TRUE, warning = FALSE}
